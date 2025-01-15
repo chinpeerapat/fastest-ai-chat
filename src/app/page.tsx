@@ -46,17 +46,15 @@ const useStreamHandler = (initialMessages: Message[] = []) => {
             const typingMessage = newMessages.find(m => m.isTyping);
             if (!typingMessage) return;
 
-            for await (let chunk of getStreamedMessageResponse(newMessages)) {
-                chunk = chunk.replaceAll('0:', '').replace('\n', '');
+            for await (const chunk of getStreamedMessageResponse(newMessages)) {
                 bufferRef.current += chunk;
 
-                // Clear any existing timeout
                 if (timeoutRef.current) {
                     clearTimeout(timeoutRef.current);
                 }
                 if (
                     bufferRef.current.includes('\n\n') ||
-                    bufferRef.current.length > 100
+                    bufferRef.current.length > 120
                 ) {
                     flushBuffer(typingMessage.id);
                 } else {
@@ -81,7 +79,6 @@ const useStreamHandler = (initialMessages: Message[] = []) => {
             );
         } catch (error) {
             console.error('Error processing message stream:', error);
-            // Handle error appropriately
         }
     }, [flushBuffer]);
 
@@ -101,9 +98,32 @@ async function* getStreamedMessageResponse(messages: Message[]) {
         throw new Error('does not work')
     }
 
-    for await (const chunk of response.body) {
-        const utf8Content = new TextDecoder('utf-8').decode(chunk)
-        yield utf8Content
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let done = false
+    let buffer = '';
+
+    while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+
+        if (value) {
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                if (line.startsWith('0:')) {
+                    const content = line.slice(3, -1);
+                    yield content;
+                } else if (line.startsWith('2:')) {
+                    continue;
+                } else if (line.startsWith('e:')) {
+                    continue;
+                }
+            }
+        }
     }
 }
 

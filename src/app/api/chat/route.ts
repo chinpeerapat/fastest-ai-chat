@@ -52,6 +52,7 @@ export async function POST(request: Request) {
 
                 if (done) {
                     controller.close()
+                    return;
                 }
 
                 if (value) {
@@ -61,11 +62,14 @@ export async function POST(request: Request) {
                             const jsonString = line.replace('data:', '').trim();
                             try {
                                 const jsonData = JSON.parse(jsonString);
-                                const choice = jsonData.choices[0];
-                                const content = choice.delta.content;
+                                const content = jsonData.choices[0].delta.content;
+
                                 if (content) {
-                                    const chunkToSend = `0:${content}`
-                                    controller.enqueue(encoder.encode(chunkToSend))
+                                    const chunks = content.match(/[\w]+|\s+|[^\w\s]/g) || [];
+                                    chunks.forEach((chunk: string) => {
+                                        const formattedChunk = `0:"${chunk}"\n`;
+                                        controller.enqueue(encoder.encode(formattedChunk));
+                                    });
                                 }
                             } catch (e) {
                                 console.error('Error parsing JSON: ', e);
