@@ -1,11 +1,12 @@
 'use client'
 
+import MarkdownRenderer from '@/components/markdown'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useState, useRef, useEffect, useTransition } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 
 type Message = {
     id: number
@@ -13,6 +14,82 @@ type Message = {
     content: string
     isTyping?: boolean
 }
+
+const useStreamHandler = (initialMessages: Message[] = []) => {
+    const [messages, setMessages] = useState<Message[]>(initialMessages);
+    const bufferRef = useRef<string>('');
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Function to flush buffer and update state
+    const flushBuffer = useCallback((messageId: number) => {
+        if (bufferRef.current) {
+            setMessages(prev => prev.map(m =>
+                m.id === messageId
+                    ? {
+                        ...m,
+                        content: m.content + bufferRef.current
+                    }
+                    : m
+            ));
+            bufferRef.current = '';
+        }
+    }, []);
+
+    const handleOnMessageReceive = useCallback(async (newMessages: Message[]) => {
+        setMessages(prev => {
+            const existingIds = new Set(prev.map(m => m.id));
+            const messagesToAdd = newMessages.filter(m => !existingIds.has(m.id));
+            return [...prev, ...messagesToAdd];
+        });
+
+        try {
+            const typingMessage = newMessages.find(m => m.isTyping);
+            if (!typingMessage) return;
+
+            for await (let chunk of getStreamedMessageResponse(newMessages)) {
+                chunk = chunk.replaceAll('0:', '').replace('\n', '');
+                bufferRef.current += chunk;
+
+                // Clear any existing timeout
+                if (timeoutRef.current) {
+                    clearTimeout(timeoutRef.current);
+                }
+                if (
+                    bufferRef.current.includes('\n\n') ||
+                    bufferRef.current.length > 100
+                ) {
+                    flushBuffer(typingMessage.id);
+                } else {
+                    timeoutRef.current = setTimeout(() => {
+                        flushBuffer(typingMessage.id);
+                    }, 50);
+                }
+            }
+
+            // Final flush and cleanup
+            flushBuffer(typingMessage.id);
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+
+            // Mark message as no longer typing
+            setMessages(prev =>
+                prev.map(m => ({
+                    ...m,
+                    isTyping: false
+                }))
+            );
+        } catch (error) {
+            console.error('Error processing message stream:', error);
+            // Handle error appropriately
+        }
+    }, [flushBuffer]);
+
+    return {
+        messages,
+        handleOnMessageReceive
+    };
+};
 
 async function* getStreamedMessageResponse(messages: Message[]) {
     const response = await fetch('/api/chat', {
@@ -31,40 +108,14 @@ async function* getStreamedMessageResponse(messages: Message[]) {
 }
 
 export default function ChatPage() {
-    const [messages, setMessages] = useState<Message[]>([])
     const [input, setInput] = useState('')
     const messagesEndRef = useRef<HTMLDivElement>(null)
-    const [isPending, startTransition] = useTransition()
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
     }
 
-    const handleOnMessageReceive = async (newMessages: Message[]) => {
-        let responseMessages = [...messages]
-        for await (const message of getStreamedMessageResponse(newMessages)) {
-            responseMessages = newMessages.map((m) => {
-                const updatedTypingMessage = m.isTyping ? responseMessages.find(e => e.id == m.id) : null
-                if (updatedTypingMessage) {
-                    return {
-                        ...updatedTypingMessage,
-                        content: updatedTypingMessage.content + message,
-                    }
-                } else {
-                    return m
-                }
-            }) as Message[]
-            setMessages(responseMessages)
-        }
-
-        setMessages(prev => {
-            return prev.map(e => ({
-                ...e,
-                isTyping: false
-            }))
-        })
-    }
-
+    const { messages, handleOnMessageReceive } = useStreamHandler();
     useEffect(scrollToBottom, [messages])
 
     const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -84,19 +135,9 @@ export default function ChatPage() {
                 isTyping: true,
             }
         ] as Message[]
-        startTransition(() => {
-            setMessages(newMessages);
-            setInput('')
-        })
+        handleOnMessageReceive(newMessages)
+        setInput('')
     }
-
-    useEffect(() => {
-        if (!isPending) {
-            if (messages.length) {
-                handleOnMessageReceive(messages)
-            }
-        }
-    }, [isPending])
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setInput(e.target.value)
@@ -118,7 +159,7 @@ export default function ChatPage() {
                                 </Avatar>
                                 <div className="flex-grow">
                                     <p className="font-semibold mb-1">{message.role === 'user' ? 'You' : 'AI'}</p>
-                                    <p className="text-gray-700">{message.content}</p>
+                                    <MarkdownRenderer content={message.content} />
                                 </div>
                             </div>
                         ))}
