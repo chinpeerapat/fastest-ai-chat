@@ -29,7 +29,6 @@ export async function POST(request: Request) {
         model: DEFAULT_MODEL,
         messages: fullMessages,
         stream: true,
-        max_tokens: 1024,
         temperature: 0.7
     }
 
