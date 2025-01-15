@@ -144,37 +144,52 @@ export default function ChatPage() {
     }
 
     return (
-        <div className="flex flex-col h-screen bg-gray-100">
-            <header className="bg-white shadow-sm py-4">
-                <h1 className="text-xl font-semibold text-center">ChatGPT Clone</h1>
+        <div className="flex flex-col h-screen bg-gray-950">
+            <header className="bg-gray-900 border-b border-gray-800 py-4 px-4">
+                <h1 className="text-xl font-semibold text-center text-gray-100">ChatGPT Clone</h1>
             </header>
-            <Card className="flex-grow m-4 flex flex-col">
+            <Card className="flex-grow m-4 flex flex-col bg-gray-900 border-gray-800">
                 <CardContent className="flex-grow p-4">
                     <ScrollArea className="h-full pr-4">
                         {messages.map((message) => (
-                            <div key={message.id} className="mb-4 flex items-start">
-                                <Avatar className="mr-2">
-                                    <AvatarImage src={message.role === 'user' ? '/user-avatar.png' : '/ai-avatar.png'} />
-                                    <AvatarFallback>{message.role === 'user' ? 'U' : 'AI'}</AvatarFallback>
+                            <div key={message.id} className="mb-6 flex items-start">
+                                <Avatar className="mr-3 w-8 h-8">
+                                    <AvatarImage
+                                        src={message.role === 'user' ? '/user-avatar.png' : '/ai-avatar.png'}
+                                        className="bg-gray-800"
+                                    />
+                                    <AvatarFallback className="bg-gray-800 text-gray-200">
+                                        {message.role === 'user' ? 'U' : 'AI'}
+                                    </AvatarFallback>
                                 </Avatar>
                                 <div className="flex-grow">
-                                    <p className="font-semibold mb-1">{message.role === 'user' ? 'You' : 'AI'}</p>
-                                    <MarkdownRenderer content={message.content} />
+                                    <p className="font-medium text-gray-200 mb-1">
+                                        {message.role === 'user' ? 'You' : 'AI'}
+                                    </p>
+                                    <div className="text-gray-300">
+                                        <MarkdownRenderer content={message.content} />
+                                    </div>
                                 </div>
                             </div>
                         ))}
                         <div ref={messagesEndRef} />
                     </ScrollArea>
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="border-t border-gray-800 p-4">
                     <form onSubmit={onSubmit} className="flex w-full space-x-2">
                         <Input
                             value={input}
                             onChange={handleInputChange}
                             placeholder="Type your message..."
-                            className="flex-grow"
+                            className="flex-grow bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-400 focus-visible:ring-gray-700"
                         />
-                        <Button type="submit">Send</Button>
+                        <Button
+                            type="submit"
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            disabled={!input.trim()}
+                        >
+                            Send
+                        </Button>
                     </form>
                 </CardFooter>
             </Card>

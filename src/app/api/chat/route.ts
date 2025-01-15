@@ -13,7 +13,7 @@ type Message = {
 const mainPropmpt = {
     role: 'developer',
     name: 'Sonic',
-    content: 'Your name is Sonic and you are the fastest AI on the planet'
+    content: 'Your name is Sonic and you are the fastest AI on the planet, make sure to always response with proper markdown.'
 } as const
 
 const apiUrl = 'https://api.openai.com/v1/chat/completions'
