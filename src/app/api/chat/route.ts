@@ -1,3 +1,5 @@
+import { FastJson } from 'fast-json'
+
 export const dynamic = 'force-dynamic'; // always run dynamically
 
 const DEFAULT_MODEL = "gpt-4o-mini"
@@ -26,7 +28,9 @@ export async function POST(request: Request) {
     const apiDataBody = {
         model: DEFAULT_MODEL,
         messages: fullMessages,
-        stream: true
+        stream: true,
+        max_tokens: 100,
+        temperature: 0.7
     }
 
     const apiResponse = await fetch(apiUrl, {
@@ -34,8 +38,10 @@ export async function POST(request: Request) {
         body: JSON.stringify(apiDataBody),
         headers: {
             Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
-        }
+            'Content-Type': 'application/json',
+            'Connection': 'keep-alive'
+        },
+        keepalive: true
     })
 
     const reader = apiResponse.body!.getReader();
@@ -60,19 +66,18 @@ export async function POST(request: Request) {
                     chunk.split('\n').forEach(line => {
                         if (line.startsWith('data:')) {
                             const jsonString = line.replace('data:', '').trim();
-                            try {
-                                const jsonData = JSON.parse(jsonString);
-                                const content = jsonData.choices[0].delta.content;
+                            if (jsonString === '[DONE]') {
+                                return
+                            }
+                            const jsonData = JSON.parse(jsonString);
+                            const content = jsonData.choices[0].delta.content;
 
-                                if (content) {
-                                    const chunks = content.match(/[\w]+|\s+|[^\w\s]/g) || [];
-                                    chunks.forEach((chunk: string) => {
-                                        const formattedChunk = `0:"${chunk}"\n`;
-                                        controller.enqueue(encoder.encode(formattedChunk));
-                                    });
-                                }
-                            } catch (e) {
-                                console.error('Error parsing JSON: ', e);
+                            if (content) {
+                                const chunks = content.match(/[\w]+|\s+|[^\w\s]/g) || [];
+                                chunks.forEach((chunk: string) => {
+                                    const formattedChunk = `0:"${chunk}"\n`;
+                                    controller.enqueue(encoder.encode(formattedChunk));
+                                });
                             }
                         }
                     });
